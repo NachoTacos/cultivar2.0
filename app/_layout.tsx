@@ -6,7 +6,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
-// Componente que vigila las rutas
+
 function RootLayoutNav() {
   const { userToken, isLoading } = useAuth();
   const segments = useSegments();
@@ -15,13 +15,16 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading) return;
 
+    const publicRoutes = ['login', 'register'];
+    const currentRoute = segments[0];
+
     if (!userToken) {
-      if (segments[0] !== 'login') {
+      if (!publicRoutes.includes(currentRoute)) {
         router.replace('/login');
       }
     } 
     else {
-      if (segments[0] === 'login') {
+      if (publicRoutes.includes(currentRoute)) {
         router.replace('/(tabs)');
       }
     }
@@ -30,6 +33,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" />
+      <Stack.Screen name="register" /> 
       <Stack.Screen name="(tabs)" />
     </Stack>
   );
