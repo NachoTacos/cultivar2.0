@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
+// Componente que vigila las rutas
 function RootLayoutNav() {
   const { userToken, isLoading } = useAuth();
   const segments = useSegments();
@@ -14,15 +15,15 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)';
-
-    // Si no hay token lo manda al login de nuevo
-    if (!userToken && inAuthGroup) {
-      router.replace('/login');
+    if (!userToken) {
+      if (segments[0] !== 'login') {
+        router.replace('/login');
+      }
     } 
-    // Si si encuentra token y está en el login lo manda al dashboard
-    else if (userToken && !inAuthGroup) {
-      router.replace('/(tabs)');
+    else {
+      if (segments[0] === 'login') {
+        router.replace('/(tabs)');
+      }
     }
   }, [userToken, isLoading, segments]);
 
