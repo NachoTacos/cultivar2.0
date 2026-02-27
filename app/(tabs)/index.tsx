@@ -5,30 +5,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
-// --- COMPONENTE REUTILIZABLE ---
 const InfoCard = ({ iconName, iconFamily, title, value, valueColor = '#2C3E50' }: any) => {
   const IconComponent = iconFamily === 'Ionicons' ? Ionicons : MaterialCommunityIcons;
   return (
     <View style={[styles.card, styles.shadow]}>
       <IconComponent name={iconName} size={28} color="#2C3E50" style={{ marginBottom: 12 }} />
       <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={[styles.cardValue, { color: valueColor }]}>{value}</Text>
+      <Text style={[styles.cardValue, { color: valueColor, textAlign: 'center' }]}>{value}</Text>
     </View>
   );
 };
 
-// --- PANTALLA PRINCIPAL ---
 export default function HomeScreen() {
   const { userToken, logout } = useAuth();
   
   const [sensorData, setSensorData] = useState<any>(null);
-  // Estado para la API del clima
   const [weatherData, setWeatherData] = useState({ temp: '--', condition: 'Consultando...', icon: 'weather-partly-cloudy' });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-
-  // 1. Subrutina del Clima (OpenWeatherMap) con Rastreo de Diagnóstico
+  // 1. Subrutina del Clima (OpenWeatherMap)
   const fetchWeather = async () => {
     const OPENWEATHER_API_KEY = process.env.EXPO_PUBLIC_OPENWEATHER_API_KEY; 
     
@@ -40,15 +36,9 @@ export default function HomeScreen() {
     const url = `https://api.openweathermap.org/data/2.5/weather?q=Durango,MX&units=metric&lang=es&appid=${OPENWEATHER_API_KEY}`;
 
     try {
-      console.log("Iniciando transmisión con el satélite meteorológico...");
       const response = await fetch(url);
-      
-      // Imprimimos el código de estado devuelto por el servidor
-      console.log(`Estado de respuesta HTTP: ${response.status}`);
-
       if (response.ok) {
         const data = await response.json();
-        console.log(`Telemetría meteorológica exitosa. Temperatura actual en Durango: ${data.main.temp}°C`);
         
         let weatherIcon = 'weather-partly-cloudy';
         const mainWeather = data.weather[0].main;
@@ -61,16 +51,12 @@ export default function HomeScreen() {
           condition: data.weather[0].description,
           icon: weatherIcon
         });
-      } else {
-        // Si la petición falla, extraemos el mensaje exacto del error
-        const errorData = await response.json();
-        console.error("Respuesta negativa del satélite:", errorData);
       }
     } catch (error) {
-      console.error("Fallo crítico de red al intentar conectar:", error);
+      console.error("Anomalía al conectar con el satélite meteorológico:", error);
     }
   };
-  // 2. Subrutina de Telemetría (Invernadero)
+
   const fetchTelemetry = async () => {
     if (!userToken) return;
     try {
@@ -93,7 +79,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Inicialización sincronizada
   useEffect(() => {
     fetchTelemetry();
     fetchWeather();
@@ -116,11 +101,9 @@ export default function HomeScreen() {
     );
   };
 
-  // 3. Lógica calibrada para el sensor SCD30 (Dióxido de Carbono en ppm)
+ 
   const getAirQualityStatus = (co2Value: number) => {
     if (!co2Value) return { text: "N/D", color: "#8A95A5" };
-    
-    // Niveles estándar de CO2 en interiores
     if (co2Value < 1000) return { text: "ÓPTIMA", color: "#2ECC71" }; 
     if (co2Value < 2000) return { text: "REGULAR", color: "#F39C12" }; 
     return { text: "CRÍTICA", color: "#E74C3C" }; 
@@ -136,6 +119,10 @@ export default function HomeScreen() {
   }
 
   const airQuality = getAirQualityStatus(sensorData?.air_quality);
+  
+  const formattedAirQuality = sensorData?.air_quality 
+    ? `${airQuality.text}\n(${Math.round(sensorData.air_quality)} ppm)` 
+    : airQuality.text;
 
   return (
     <LinearGradient colors={['#D5EFE0', '#FFFFFF']} style={styles.container}>
@@ -159,7 +146,6 @@ export default function HomeScreen() {
 
           <View style={[styles.telemetryBar, styles.shadow]}>
             <View style={styles.telemetryLeft}>
-              {/* Icono y temperatura dinámicos desde OpenWeatherMap */}
               <MaterialCommunityIcons name={weatherData.icon as any} size={36} color="#3498DB" />
               <View style={styles.telemetryInfo}>
                 <Text style={styles.telemetryTemp}>{weatherData.temp}°C</Text>
@@ -194,7 +180,7 @@ export default function HomeScreen() {
               iconName="leaf" 
               iconFamily="Ionicons"
               title="CO2 (SCD30)" 
-              value={airQuality.text} 
+              value={formattedAirQuality} 
               valueColor={airQuality.color} 
             />
             <InfoCard 
@@ -223,7 +209,6 @@ export default function HomeScreen() {
   );
 }
 
-// --- ESTILOS ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
@@ -252,5 +237,5 @@ const styles = StyleSheet.create({
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   card: { backgroundColor: '#F9FDFA', width: '47%', borderRadius: 12, paddingVertical: 20, paddingHorizontal: 10, alignItems: 'center', marginBottom: 15 },
   cardTitle: { fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8A95A5', marginBottom: 10, textAlign: 'center' },
-  cardValue: { fontFamily: 'Lato_700Bold', fontSize: 22 }
+  cardValue: { fontFamily: 'Lato_700Bold', fontSize: 20 } 
 });
