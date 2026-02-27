@@ -8,12 +8,15 @@ import {
   FlatList, 
   KeyboardAvoidingView, 
   Platform,
-  Keyboard
+  Keyboard,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
 
+// --- INTERFAZ ---
 interface Message {
   id: string;
   text: string;
@@ -21,15 +24,17 @@ interface Message {
 }
 
 export default function ChatScreen() {
+  const { userToken } = useAuth();
+  
   const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [previousContext, setPreviousContext] = useState<any>(null); // Memoria positrónica
   
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: '¡Hola! Soy tu asistente de IA del invernadero. ¿Cómo está el clima allá adentro hoy?', sender: 'ai' },
-    { id: '2', text: 'La temperatura está a 35%, pero la calidad del aire es mala.', sender: 'user' },
-    { id: '3', text: 'Entendido. Te recomiendo revisar los extractores y aumentar la ventilación. ¿Quieres que ajuste los parámetros por ti?', sender: 'ai' },
+    { id: '1', text: '¡Hola! Soy tu asistente de IA del invernadero. ¿Cómo está el clima allá adentro hoy o qué parámetros deseas ajustar?', sender: 'ai' }
   ]);
 
   const handleButtonPress = () => {
@@ -40,27 +45,67 @@ export default function ChatScreen() {
     }
   };
 
-  const sendMessage = () => {
-    if (inputText.trim().length === 0) return;
+  const sendMessage = async () => {
+    if (inputText.trim().length === 0 || !userToken) return;
 
+    const userText = inputText.trim();
     const newUserMessage: Message = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: userText,
       sender: 'user',
     };
 
+    // 1. Despliegue visual inmediato
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
     setInputText('');
     Keyboard.dismiss(); 
+    setIsLoading(true);
 
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: 'He registrado tu instrucción. Estoy analizando los datos para darte la mejor solución.',
-        sender: 'ai',
-      };
-      setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
+    // 2. Construcción del paquete de datos
+    const payload = {
+      message: userText,
+      previous: previousContext
+    };
+
+    try {
+      // 3. Conexión con el núcleo de DeepSeek
+      const response = await fetch('https://cultiva-backend.onrender.com/gardens/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // 4. Almacenamos el JSON completo para la próxima ronda
+        setPreviousContext(data);
+
+        // 5. Mostramos la respuesta
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: data.message || "Comando ejecutado con éxito.",
+          sender: 'ai',
+        };
+        setMessages(prev => [...prev, aiResponse]);
+      } else {
+        const errorData = await response.json();
+        console.error("Anomalía en el enlace neuronal:", errorData);
+        
+        setMessages(prev => [...prev, { 
+          id: (Date.now() + 1).toString(), 
+          text: "Hubo un error de conexión con la red principal. Intenta de nuevo.", 
+          sender: 'ai' 
+        }]);
+      }
+    } catch (error) {
+      console.error("Fallo crítico de red:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
@@ -84,7 +129,7 @@ export default function ChatScreen() {
     );
   };
 
-return (
+  return (
     <LinearGradient colors={['#D5EFE0', '#FFFFFF']} style={styles.container}>
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -106,6 +151,7 @@ return (
             keyExtractor={item => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.chatContainer}
+            showsVerticalScrollIndicator={false}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           />
@@ -125,12 +171,17 @@ return (
             <TouchableOpacity 
               style={[styles.actionButton, styles.shadow]} 
               onPress={handleButtonPress}
+              disabled={isLoading}
             >
-              <Ionicons 
-                name={inputText.trim().length === 0 ? "chevron-up" : "send"} 
-                size={24} 
-                color="#2C3E50" 
-              />
+              {isLoading ? (
+                <ActivityIndicator color="#2C3E50" size="small" />
+              ) : (
+                <Ionicons 
+                  name={inputText.trim().length === 0 ? "chevron-up" : "send"} 
+                  size={24} 
+                  color="#2C3E50" 
+                />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -140,13 +191,10 @@ return (
   );
 }
 
+// --- ESTILOS ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
   shadow: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -154,89 +202,19 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  header: {
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  profileIconContainer: {
-    backgroundColor: '#F9FDFA',
-    padding: 8,
-    borderRadius: 8,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  chatContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  messageWrapper: {
-    flexDirection: 'row',
-    marginBottom: 15,
-    width: '100%',
-  },
-  messageWrapperAI: {
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
-  },
-  messageWrapperUser: {
-    justifyContent: 'flex-end', 
-  },
-  aiAvatar: {
-    width: 35,
-    height: 35,
-    borderRadius: 17.5,
-    marginRight: 10,
-    marginTop: 5,
-  },
-  bubble: {
-    maxWidth: '80%', 
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  aiBubble: {
-    backgroundColor: '#F4FCE3', 
-    borderTopLeftRadius: 4, 
-  },
-  userBubble: {
-    backgroundColor: '#EAEAEA', 
-    borderBottomRightRadius: 4,
-  },
-  messageText: {
-    fontFamily: 'Lato_400Regular',
-    fontSize: 16,
-    color: '#2C3E50',
-    lineHeight: 22,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    alignItems: 'flex-end', 
-  },
-  textInput: {
-    flex: 1,
-    backgroundColor: '#F9FDFA',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingTop: 12, 
-    paddingBottom: 12,
-    minHeight: 45,
-    maxHeight: 120, 
-    fontFamily: 'Lato_400Regular',
-    fontSize: 16,
-    color: '#2C3E50',
-    marginRight: 10,
-  },
-  actionButton: {
-    backgroundColor: '#EAEAEA',
-    width: 45,
-    height: 45,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  }
+  header: { alignItems: 'flex-end', paddingHorizontal: 20, marginTop: 15, marginBottom: 10 },
+  profileIconContainer: { backgroundColor: '#F9FDFA', padding: 8, borderRadius: 8 },
+  keyboardAvoidingView: { flex: 1 },
+  chatContainer: { paddingHorizontal: 20, paddingBottom: 20 },
+  messageWrapper: { flexDirection: 'row', marginBottom: 15, width: '100%' },
+  messageWrapperAI: { justifyContent: 'flex-start', alignItems: 'flex-start' },
+  messageWrapperUser: { justifyContent: 'flex-end' },
+  aiAvatar: { width: 35, height: 35, borderRadius: 17.5, marginRight: 10, marginTop: 5 },
+  bubble: { maxWidth: '80%', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12 },
+  aiBubble: { backgroundColor: '#F4FCE3', borderTopLeftRadius: 4 },
+  userBubble: { backgroundColor: '#EAEAEA', borderBottomRightRadius: 4 },
+  messageText: { fontFamily: 'Lato_400Regular', fontSize: 16, color: '#2C3E50', lineHeight: 22 },
+  inputContainer: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 10, alignItems: 'flex-end' },
+  textInput: { flex: 1, backgroundColor: '#F9FDFA', borderRadius: 12, paddingHorizontal: 15, paddingTop: 12, paddingBottom: 12, minHeight: 45, maxHeight: 120, fontFamily: 'Lato_400Regular', fontSize: 16, color: '#2C3E50', marginRight: 10 },
+  actionButton: { backgroundColor: '#EAEAEA', width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }
 });
