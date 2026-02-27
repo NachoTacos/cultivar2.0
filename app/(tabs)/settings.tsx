@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,48 +58,56 @@ export default function SettingsScreen() {
     shading: 'Automático'
   });
 
+  const [refreshing, setRefreshing] = useState(false);
   const debounceTimers = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
 
-  useEffect(() => {
-    const fetchInitialStatus = async () => {
-      if (!userToken) return;
+  const fetchStatus = useCallback(async () => {
+    if (!userToken) return;
 
-      try {
-        const response = await fetch('https://cultiva-backend.onrender.com/gardens/activation', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${userToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          
-          const parseStatus = (value: boolean | undefined) => {
-            if (value === true) return 'Encendido';
-            if (value === false) return 'Apagado';
-            return 'Automático';
-          };
-
-          setSystems(prev => ({
-            ...prev,
-            irrigator: data.irrigator !== undefined ? parseStatus(data.irrigator) : prev.irrigator,
-            heater: data.heater !== undefined ? parseStatus(data.heater) : prev.heater,
-            lighting: data.lighting !== undefined ? parseStatus(data.lighting) : prev.lighting,
-            uv: data.uv !== undefined ? parseStatus(data.uv) : prev.uv,
-            shading: data.shading !== undefined ? parseStatus(data.shading) : prev.shading
-          }));
-        } else {
-          console.error("Anomalía al leer el estado de los actuadores desde el servidor central.");
+    try {
+      const response = await fetch('https://cultiva-backend.onrender.com/gardens/activation', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json'
         }
-      } catch (error) {
-        console.error("Fallo de red en la subrutina de lectura:", error);
-      }
-    };
+      });
 
-    fetchInitialStatus();
+      if (response.ok) {
+        const data = await response.json();
+        
+        const parseStatus = (value: boolean | undefined) => {
+          if (value === true) return 'Encendido';
+          if (value === false) return 'Apagado';
+          return 'Automático';
+        };
+
+        setSystems(prev => ({
+          ...prev,
+          irrigator: data.irrigator !== undefined ? parseStatus(data.irrigator) : prev.irrigator,
+          heater: data.heater !== undefined ? parseStatus(data.heater) : prev.heater,
+          lighting: data.lighting !== undefined ? parseStatus(data.lighting) : prev.lighting,
+          uv: data.uv !== undefined ? parseStatus(data.uv) : prev.uv,
+          shading: data.shading !== undefined ? parseStatus(data.shading) : prev.shading
+        }));
+      } else {
+        console.error("Anomalía al leer el estado de los actuadores.");
+      }
+    } catch (error) {
+      console.error("Fallo de red en la subrutina de lectura:", error);
+    } finally {
+      setRefreshing(false); 
+    }
   }, [userToken]);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchStatus();
+  }, [fetchStatus]);
 
   const handleSystemChange = (systemKey: string, newValue: string) => {
     setSystems(prev => ({ ...prev, [systemKey]: newValue }));
@@ -146,7 +154,13 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.settingsWrapper} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          contentContainerStyle={styles.settingsWrapper} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2ECC71']} />
+          }
+        >
           <CustomThreeWaySwitch label="Sistema de Irrigación" currentValue={systems.irrigator} onSelect={(val: string) => handleSystemChange('irrigator', val)} />
           <View style={styles.divider} />
           <CustomThreeWaySwitch label="Calefacción (Heater)" currentValue={systems.heater} onSelect={(val: string) => handleSystemChange('heater', val)} />
@@ -163,7 +177,6 @@ export default function SettingsScreen() {
     </LinearGradient>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
