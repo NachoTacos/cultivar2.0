@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
+// --- SUBCOMPONENTE ---
 const CustomThreeWaySwitch = ({ label, currentValue, onSelect }: any) => {
   const options = ['Apagado', 'Automático', 'Encendido'];
 
@@ -47,6 +48,7 @@ const CustomThreeWaySwitch = ({ label, currentValue, onSelect }: any) => {
   );
 };
 
+// --- PANTALLA PRINCIPAL ---
 export default function SettingsScreen() {
   const { userToken } = useAuth();
 
@@ -60,43 +62,56 @@ export default function SettingsScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const debounceTimers = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
+  
+  // Referencia para mantener el estado actual de los sistemas siempre accesible en los temporizadores
+  const currentSystemsRef = useRef(systems);
+  useEffect(() => { currentSystemsRef.current = systems; }, [systems]);
 
+  // 1. Subrutina de lectura con sondas de diagnóstico
   const fetchStatus = useCallback(async () => {
     if (!userToken) return;
-
+    
+    console.log("\n[SETTINGS DEBUG] --- Iniciando lectura de estado (GET) ---");
+    
     try {
-      const response = await fetch('https://cultiva-backend.onrender.com/gardens/activation', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${userToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const headers = {
+        'Authorization': `Bearer ${userToken}`,
+        'Content-Type': 'application/json'
+      };
 
-      if (response.ok) {
-        const data = await response.json();
+      // Ejecutamos ambas peticiones GET al mismo tiempo
+      const [resActive, resAuto] = await Promise.all([
+        fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', { headers }),
+        fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=auto', { headers })
+      ]);
+
+      if (resActive.ok && resAuto.ok) {
+        const dataActive = await resActive.json();
+        const dataAuto = await resAuto.json();
         
-        const parseStatus = (value: boolean | undefined) => {
-          if (value === true) return 'Encendido';
-          if (value === false) return 'Apagado';
-          return 'Automático';
+        console.log("[SETTINGS DEBUG] Respuesta servidor (mode=active):", JSON.stringify(dataActive));
+        console.log("[SETTINGS DEBUG] Respuesta servidor (mode=auto):", JSON.stringify(dataAuto));
+        
+        const parseCombinedStatus = (key: keyof typeof systems, currentVal: string) => {
+          if (dataAuto && dataAuto[key] === true) return 'Automático';
+          if (dataActive && dataActive[key] !== undefined) return dataActive[key] ? 'Encendido' : 'Apagado';
+          return currentVal;
         };
 
         setSystems(prev => ({
-          ...prev,
-          irrigator: data.irrigator !== undefined ? parseStatus(data.irrigator) : prev.irrigator,
-          heater: data.heater !== undefined ? parseStatus(data.heater) : prev.heater,
-          lighting: data.lighting !== undefined ? parseStatus(data.lighting) : prev.lighting,
-          uv: data.uv !== undefined ? parseStatus(data.uv) : prev.uv,
-          shading: data.shading !== undefined ? parseStatus(data.shading) : prev.shading
+          irrigator: parseCombinedStatus('irrigator', prev.irrigator),
+          heater: parseCombinedStatus('heater', prev.heater),
+          lighting: parseCombinedStatus('lighting', prev.lighting),
+          uv: parseCombinedStatus('uv', prev.uv),
+          shading: parseCombinedStatus('shading', prev.shading)
         }));
       } else {
-        console.error("Anomalía al leer el estado de los actuadores.");
+        console.error("[SETTINGS DEBUG] Error HTTP en GET. Active:", resActive.status, "Auto:", resAuto.status);
       }
     } catch (error) {
-      console.error("Fallo de red en la subrutina de lectura:", error);
+      console.error("[SETTINGS DEBUG] Fallo de red en GET:", error);
     } finally {
-      setRefreshing(false); 
+      setRefreshing(false);
     }
   }, [userToken]);
 
@@ -109,39 +124,68 @@ export default function SettingsScreen() {
     fetchStatus();
   }, [fetchStatus]);
 
+// Reemplazamos el diccionario de temporizadores por un único temporizador global
+  const globalDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleSystemChange = (systemKey: string, newValue: string) => {
-    setSystems(prev => ({ ...prev, [systemKey]: newValue }));
+    console.log(`\n[SETTINGS DEBUG] --- Intento de cambio: ${systemKey} -> ${newValue} ---`);
+    
+    // Al usar la función de flecha dentro de setSystems, garantizamos tener el estado más reciente
+    setSystems(prev => {
+      const newState = { ...prev, [systemKey]: newValue };
 
-    if (debounceTimers.current[systemKey]) {
-      clearTimeout(debounceTimers.current[systemKey]);
-    }
+      // Si el usuario toca otro botón rápido, cancelamos el envío anterior
+      if (globalDebounceTimer.current) {
+        clearTimeout(globalDebounceTimer.current);
+      }
 
-    debounceTimers.current[systemKey] = setTimeout(async () => {
-      if (newValue === 'Automático') return; 
+      // Iniciamos una cuenta regresiva de 800ms antes de transmitir
+      globalDebounceTimer.current = setTimeout(async () => {
+        const headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        };
 
-      const payload = {
-        [systemKey]: newValue === 'Encendido'
-      };
+        // 1. Construimos un único paquete para el modo Automático
+        const autoPayload = {
+          irrigator: newState.irrigator === 'Automático',
+          heater: newState.heater === 'Automático',
+          lighting: newState.lighting === 'Automático',
+          uv: newState.uv === 'Automático',
+          shading: newState.shading === 'Automático'
+        };
 
-      try {
-        const response = await fetch('https://cultiva-backend.onrender.com/gardens/activation', {
-          method: 'PATCH', 
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userToken}`
-          },
-          body: JSON.stringify(payload)
+        // 2. Construimos un paquete para el modo Activo (solo con los que están manuales)
+        const activePayload: Record<string, boolean> = {};
+        Object.keys(newState).forEach(key => {
+          const val = newState[key as keyof typeof newState];
+          if (val !== 'Automático') {
+            activePayload[key] = (val === 'Encendido');
+          }
         });
 
-        if (!response.ok) {
-          console.error("Anomalía en el servidor al intentar parchear el sistema:", systemKey);
-        } else {
-          console.log(`Orden transmitida y confirmada: ${systemKey} -> ${newValue}`);
+        try {
+          console.log(`[SETTINGS DEBUG] Transmitiendo paquete global mode=auto:`, JSON.stringify(autoPayload));
+          const resAuto = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=auto', {
+            method: 'PATCH', headers, body: JSON.stringify(autoPayload)
+          });
+          console.log(`[SETTINGS DEBUG] Estatus mode=auto:`, resAuto.status);
+
+          // 3. Solo enviamos a mode=active si hay al menos un actuador en modo manual
+          if (Object.keys(activePayload).length > 0) {
+            console.log(`[SETTINGS DEBUG] Transmitiendo paquete global mode=active:`, JSON.stringify(activePayload));
+            const resActive = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', {
+              method: 'PATCH', headers, body: JSON.stringify(activePayload)
+            });
+            console.log(`[SETTINGS DEBUG] Estatus mode=active:`, resActive.status);
+          }
+        } catch (error: any) {
+          console.error("[SETTINGS DEBUG] Fallo en la transmisión global:", error.message);
         }
-      } catch (error) {
-        console.error("Fallo de red en subrutina de parcheo:", error);
-      }
-    }, 500); 
+      }, 800); 
+
+      return newState; // Actualizamos la interfaz inmediatamente
+    });
   };
 
   return (
@@ -178,6 +222,7 @@ export default function SettingsScreen() {
   );
 }
 
+// --- ESTILOS ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
