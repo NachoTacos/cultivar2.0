@@ -45,64 +45,72 @@ export default function ChatScreen() {
     }
   };
 
-  const sendMessage = async () => {
+const sendMessage = async () => {
     if (inputText.trim().length === 0 || !userToken) return;
-
     const userText = inputText.trim();
-    const newUserMessage: Message = {
-      id: Date.now().toString(),
-      text: userText,
-      sender: 'user',
-    };
+    const newUserMessage: Message = { id: Date.now().toString(), text: userText, sender: 'user' };
 
-    // 1. Despliegue visual inmediato
+    console.log(`\n[CHAT DEBUG] --- Iniciando comunicación con DeepSeek ---`);
+    console.log(`[CHAT DEBUG] Mensaje del usuario: "${userText}"`);
+
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
     setInputText('');
     Keyboard.dismiss(); 
     setIsLoading(true);
 
-    // 2. Construcción del paquete de datos
+    let currentState = null;
+    try {
+      console.log(`[CHAT DEBUG] Solicitando estado físico real (mode=active) antes de hablar con IA...`);
+      const resRealidad = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', {
+        headers: { 'Authorization': `Bearer ${userToken}` }
+      });
+      if (resRealidad.ok) {
+        currentState = await resRealidad.json();
+        console.log(`[CHAT DEBUG] Estado físico obtenido:`, JSON.stringify(currentState));
+      } else {
+        console.log(`[CHAT DEBUG] Error al obtener realidad. HTTP Status:`, resRealidad.status);
+      }
+    } catch (e) {
+      console.error("[CHAT DEBUG] Fallo de red al obtener realidad:", e);
+    }
+
+    let contextForAI = previousContext ? { ...previousContext } : null;
+    if (currentState) {
+      if (!contextForAI) {
+        contextForAI = { message: "", informed: true, activated: false, command: currentState };
+      } else {
+        contextForAI.command = currentState;
+      }
+    }
+
     const payload = {
       message: userText,
-      previous: previousContext
+      previous: contextForAI
     };
 
+    console.log(`[CHAT DEBUG] Payload final que se enviará a DeepSeek:`, JSON.stringify(payload, null, 2));
+
     try {
-      // 3. Conexión con el núcleo de DeepSeek
       const response = await fetch('https://cultiva-backend.onrender.com/gardens/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
         body: JSON.stringify(payload)
       });
 
       if (response.ok) {
         const data = await response.json();
-        
-        // 4. Almacenamos el JSON completo para la próxima ronda
-        setPreviousContext(data);
+        console.log(`[CHAT DEBUG] Respuesta cruda de DeepSeek:`, JSON.stringify(data, null, 2));
+        setPreviousContext(data); 
 
-        // 5. Mostramos la respuesta
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: data.message || "Comando ejecutado con éxito.",
-          sender: 'ai',
-        };
+        const aiResponse: Message = { id: (Date.now() + 1).toString(), text: data.message || "Procesado.", sender: 'ai' };
         setMessages(prev => [...prev, aiResponse]);
       } else {
-        const errorData = await response.json();
-        console.error("Anomalía en el enlace neuronal:", errorData);
-        
-        setMessages(prev => [...prev, { 
-          id: (Date.now() + 1).toString(), 
-          text: "Hubo un error de conexión con la red principal. Intenta de nuevo.", 
-          sender: 'ai' 
-        }]);
+        const err = await response.json();
+        console.error(`[CHAT DEBUG] Error del servidor de Chat:`, err);
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: "Fallo en el núcleo lógico.", sender: 'ai' }]);
       }
     } catch (error) {
-      console.error("Fallo crítico de red:", error);
+      console.error("[CHAT DEBUG] Fallo crítico de comunicación:", error);
     } finally {
       setIsLoading(false);
     }
