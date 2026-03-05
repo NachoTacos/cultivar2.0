@@ -66,7 +66,6 @@ if (response.ok) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Sacamos el botón de posición absoluta para que fluya con el scroll */}
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={() => router.back()}
@@ -144,7 +143,6 @@ if (response.ok) {
   );
 }
 
-// --- ESTILOS ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   keyboardView: { flex: 1 },
@@ -152,7 +150,6 @@ const styles = StyleSheet.create({
     flexGrow: 1, 
     padding: 20 
   },
-  // Ajustamos el botón de back para que empuje el contenido hacia abajo naturalmente
   backButton: {
     marginTop: Platform.OS === 'ios' ? 50 : 30,
     alignSelf: 'flex-start',
@@ -163,7 +160,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 40, // Espacio extra para que el teclado no tape el último enlace
+    paddingBottom: 40, 
   },
   title: { fontFamily: 'Lato_700Bold', fontSize: 32, color: '#2C3E50', marginBottom: 5 },
   subtitle: { fontFamily: 'Lato_400Regular', fontSize: 16, color: '#2ECC71', marginBottom: 40 },

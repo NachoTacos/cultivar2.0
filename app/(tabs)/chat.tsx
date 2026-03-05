@@ -9,14 +9,23 @@ import {
   KeyboardAvoidingView, 
   Platform,
   Keyboard,
-  ActivityIndicator
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
-// --- INTERFAZ ---
+const suggestedPrompts = [
+  "¿Cómo se encuentra el cultivo?",
+  "Enciende el riego",
+  "Enciende la calefacción",
+  "Enciende ambas iluminaciones",
+  "Coloca todos los actuadores en apagado",
+  "Háblame sobre los cuidados de mis plantas"
+];
+
 interface Message {
   id: string;
   text: string;
@@ -28,7 +37,7 @@ export default function ChatScreen() {
   
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [previousContext, setPreviousContext] = useState<any>(null); // Memoria positrónica
+  const [previousContext, setPreviousContext] = useState<any>(null);
   
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -41,13 +50,16 @@ export default function ChatScreen() {
     if (inputText.trim().length === 0) {
       inputRef.current?.focus();
     } else {
-      sendMessage();
+      sendMessage(inputText);
     }
   };
 
-const sendMessage = async () => {
-    if (inputText.trim().length === 0 || !userToken) return;
-    const userText = inputText.trim();
+  const sendMessage = async (overrideText?: string) => {
+    const textToSend = overrideText || inputText;
+    
+    if (textToSend.trim().length === 0 || !userToken) return;
+    
+    const userText = textToSend.trim();
     const newUserMessage: Message = { id: Date.now().toString(), text: userText, sender: 'user' };
 
     console.log(`\n[CHAT DEBUG] --- Iniciando comunicación con DeepSeek ---`);
@@ -66,9 +78,6 @@ const sendMessage = async () => {
       });
       if (resRealidad.ok) {
         currentState = await resRealidad.json();
-        console.log(`[CHAT DEBUG] Estado físico obtenido:`, JSON.stringify(currentState));
-      } else {
-        console.log(`[CHAT DEBUG] Error al obtener realidad. HTTP Status:`, resRealidad.status);
       }
     } catch (e) {
       console.error("[CHAT DEBUG] Fallo de red al obtener realidad:", e);
@@ -88,8 +97,6 @@ const sendMessage = async () => {
       previous: contextForAI
     };
 
-    console.log(`[CHAT DEBUG] Payload final que se enviará a DeepSeek:`, JSON.stringify(payload, null, 2));
-
     try {
       const response = await fetch('https://cultiva-backend.onrender.com/gardens/chat', {
         method: 'POST',
@@ -99,7 +106,6 @@ const sendMessage = async () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`[CHAT DEBUG] Respuesta cruda de DeepSeek:`, JSON.stringify(data, null, 2));
         setPreviousContext(data); 
 
         const aiResponse: Message = { id: (Date.now() + 1).toString(), text: data.message || "Procesado.", sender: 'ai' };
@@ -111,6 +117,7 @@ const sendMessage = async () => {
       }
     } catch (error) {
       console.error("[CHAT DEBUG] Fallo crítico de comunicación:", error);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: "Error de red. Verifica tu conexión.", sender: 'ai' }]);
     } finally {
       setIsLoading(false);
     }
@@ -164,6 +171,27 @@ const sendMessage = async () => {
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           />
 
+          <View style={styles.suggestionsContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.suggestionsScroll}
+              keyboardShouldPersistTaps="always"
+            >
+              {suggestedPrompts.map((prompt, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.suggestionBubble, styles.bubbleShadow]}
+                  activeOpacity={0.7}
+                  disabled={isLoading}
+                  onPress={() => sendMessage(prompt)}
+                >
+                  <Text style={styles.suggestionText}>{prompt}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           <View style={styles.inputContainer}>
             <TextInput
               ref={inputRef}
@@ -199,7 +227,6 @@ const sendMessage = async () => {
   );
 }
 
-// --- ESTILOS ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
@@ -213,7 +240,7 @@ const styles = StyleSheet.create({
   header: { alignItems: 'flex-end', paddingHorizontal: 20, marginTop: 15, marginBottom: 10 },
   profileIconContainer: { backgroundColor: '#F9FDFA', padding: 8, borderRadius: 8 },
   keyboardAvoidingView: { flex: 1 },
-  chatContainer: { paddingHorizontal: 20, paddingBottom: 20 },
+  chatContainer: { paddingHorizontal: 20, paddingBottom: 10 },
   messageWrapper: { flexDirection: 'row', marginBottom: 15, width: '100%' },
   messageWrapperAI: { justifyContent: 'flex-start', alignItems: 'flex-start' },
   messageWrapperUser: { justifyContent: 'flex-end' },
@@ -222,7 +249,40 @@ const styles = StyleSheet.create({
   aiBubble: { backgroundColor: '#F4FCE3', borderTopLeftRadius: 4 },
   userBubble: { backgroundColor: '#EAEAEA', borderBottomRightRadius: 4 },
   messageText: { fontFamily: 'Lato_400Regular', fontSize: 16, color: '#2C3E50', lineHeight: 22 },
-  inputContainer: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 10, alignItems: 'flex-end' },
+  
+  suggestionsContainer: { 
+    backgroundColor: 'transparent',
+    marginBottom: 5
+  },
+  suggestionsScroll: { 
+    paddingHorizontal: 20,
+    paddingVertical: 10, 
+    gap: 12 
+  },
+  suggestionBubble: { 
+    backgroundColor: '#F0FDF4', 
+    borderWidth: 1, 
+    borderColor: 'rgba(46, 204, 113, 0.25)', 
+    borderRadius: 20, 
+    paddingVertical: 10, 
+    paddingHorizontal: 16, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  suggestionText: { 
+    fontFamily: 'Lato_700Bold', 
+    fontSize: 13, 
+    color: '#27AE60' 
+  },
+  bubbleShadow: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3, 
+  },
+
+  inputContainer: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 15, paddingTop: 0, alignItems: 'flex-end' },
   textInput: { flex: 1, backgroundColor: '#F9FDFA', borderRadius: 12, paddingHorizontal: 15, paddingTop: 12, paddingBottom: 12, minHeight: 45, maxHeight: 120, fontFamily: 'Lato_400Regular', fontSize: 16, color: '#2C3E50', marginRight: 10 },
   actionButton: { backgroundColor: '#EAEAEA', width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }
 });

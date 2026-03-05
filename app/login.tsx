@@ -19,7 +19,7 @@ import { useAuth } from '../context/AuthContext';
 export default function LoginScreen() {
   const { login } = useAuth();
   const router = useRouter(); 
-  const { newUser } = useLocalSearchParams(); // Leemos el testigo oculto del enrutador
+  const { newUser } = useLocalSearchParams(); 
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,7 +47,6 @@ const handleLogin = async () => {
       const data = await response.json();
 
       if (response.ok && data.token) {
-        // Simplemente pasamos el token. AuthContext se encargará de preguntar al servidor si es nuevo.
         await login(data.token); 
       } else {
         Alert.alert("Error de acceso", data.message || "Revisa tu correo y contraseña.");
