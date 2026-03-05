@@ -13,19 +13,20 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
   const { login } = useAuth();
   const router = useRouter(); 
+  const { newUser } = useLocalSearchParams(); // Leemos el testigo oculto del enrutador
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false); 
 
-  const handleLogin = async () => {
+const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Aviso", "Por favor ingresa tu correo y contraseña.");
       return;
@@ -46,6 +47,7 @@ export default function LoginScreen() {
       const data = await response.json();
 
       if (response.ok && data.token) {
+        // Simplemente pasamos el token. AuthContext se encargará de preguntar al servidor si es nuevo.
         await login(data.token); 
       } else {
         Alert.alert("Error de acceso", data.message || "Revisa tu correo y contraseña.");
@@ -57,7 +59,7 @@ export default function LoginScreen() {
       setIsLoading(false);
     }
   };
-
+  
   return (
     <LinearGradient colors={['#D5EFE0', '#FFFFFF']} style={styles.container}>
       <KeyboardAvoidingView 
