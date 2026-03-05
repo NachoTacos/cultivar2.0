@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 // --- SUBCOMPONENTE ---
 const CustomThreeWaySwitch = ({ label, currentValue, onSelect }: any) => {
@@ -12,7 +13,7 @@ const CustomThreeWaySwitch = ({ label, currentValue, onSelect }: any) => {
   const getActiveColor = (option: string) => {
     if (option === 'Encendido') return '#2ECC71'; 
     if (option === 'Apagado') return '#E74C3C';   
-    return '#2C3E50';                             
+    return '#2C3E50';                                
   };
 
   return (
@@ -51,23 +52,22 @@ const CustomThreeWaySwitch = ({ label, currentValue, onSelect }: any) => {
 // --- PANTALLA PRINCIPAL ---
 export default function SettingsScreen() {
   const { userToken } = useAuth();
+  const router = useRouter(); // Enrutador para navegar a la edición de contexto
 
+  // Purga del sistema "shading" del estado base
   const [systems, setSystems] = useState({
     irrigator: 'Automático',
     heater: 'Automático',
     lighting: 'Automático',
-    uv: 'Automático',
-    shading: 'Automático'
+    uv: 'Automático'
   });
 
   const [refreshing, setRefreshing] = useState(false);
-  const debounceTimers = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
   
-  // Referencia para mantener el estado actual de los sistemas siempre accesible en los temporizadores
   const currentSystemsRef = useRef(systems);
   useEffect(() => { currentSystemsRef.current = systems; }, [systems]);
 
-  // 1. Subrutina de lectura con sondas de diagnóstico
+  // 1. Subrutina de lectura
   const fetchStatus = useCallback(async () => {
     if (!userToken) return;
     
@@ -79,7 +79,6 @@ export default function SettingsScreen() {
         'Content-Type': 'application/json'
       };
 
-      // Ejecutamos ambas peticiones GET al mismo tiempo
       const [resActive, resAuto] = await Promise.all([
         fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', { headers }),
         fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=auto', { headers })
@@ -102,8 +101,7 @@ export default function SettingsScreen() {
           irrigator: parseCombinedStatus('irrigator', prev.irrigator),
           heater: parseCombinedStatus('heater', prev.heater),
           lighting: parseCombinedStatus('lighting', prev.lighting),
-          uv: parseCombinedStatus('uv', prev.uv),
-          shading: parseCombinedStatus('shading', prev.shading)
+          uv: parseCombinedStatus('uv', prev.uv)
         }));
       } else {
         console.error("[SETTINGS DEBUG] Error HTTP en GET. Active:", resActive.status, "Auto:", resAuto.status);
@@ -115,77 +113,81 @@ export default function SettingsScreen() {
     }
   }, [userToken]);
 
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
+  // --- DIRECTIVA DE CICLO DE VIDA ---
+  // Ejecuta la lectura cada vez que la pestaña entra en foco
+  useFocusEffect(
+    useCallback(() => {
+      fetchStatus();
+    }, [fetchStatus])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchStatus();
   }, [fetchStatus]);
 
-// Reemplazamos el diccionario de temporizadores por un único temporizador global
   const globalDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // REFERENCIA: Memoria temporal para aislar solo los cambios recientes
+  const pendingUpdatesRef = useRef<Record<string, string>>({});
 
   const handleSystemChange = (systemKey: string, newValue: string) => {
-    console.log(`\n[SETTINGS DEBUG] --- Intento de cambio: ${systemKey} -> ${newValue} ---`);
+    console.log(`\n[SETTINGS DEBUG] --- Intento de cambio parcial: ${systemKey} -> ${newValue} ---`);
     
-    // Al usar la función de flecha dentro de setSystems, garantizamos tener el estado más reciente
-    setSystems(prev => {
-      const newState = { ...prev, [systemKey]: newValue };
+    // Actualizamos la interfaz gráfica inmediatamente para no romper la fluidez
+    setSystems(prev => ({ ...prev, [systemKey]: newValue }));
+    
+    // Registramos el cambio exacto en la bandeja de salida
+    pendingUpdatesRef.current[systemKey] = newValue;
 
-      // Si el usuario toca otro botón rápido, cancelamos el envío anterior
-      if (globalDebounceTimer.current) {
-        clearTimeout(globalDebounceTimer.current);
-      }
+    if (globalDebounceTimer.current) {
+      clearTimeout(globalDebounceTimer.current);
+    }
 
-      // Iniciamos una cuenta regresiva de 800ms antes de transmitir
-      globalDebounceTimer.current = setTimeout(async () => {
-        const headers = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
-        };
+    // Ejecución del paquete optimizado tras 800ms
+    globalDebounceTimer.current = setTimeout(async () => {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userToken}`
+      };
 
-        // 1. Construimos un único paquete para el modo Automático
-        const autoPayload = {
-          irrigator: newState.irrigator === 'Automático',
-          heater: newState.heater === 'Automático',
-          lighting: newState.lighting === 'Automático',
-          uv: newState.uv === 'Automático',
-          shading: newState.shading === 'Automático'
-        };
+      // Extraemos la cola de cambios y vaciamos la referencia para el futuro
+      const updatesToTransmit = { ...pendingUpdatesRef.current };
+      pendingUpdatesRef.current = {}; 
 
-        // 2. Construimos un paquete para el modo Activo (solo con los que están manuales)
-        const activePayload: Record<string, boolean> = {};
-        Object.keys(newState).forEach(key => {
-          const val = newState[key as keyof typeof newState];
-          if (val !== 'Automático') {
-            activePayload[key] = (val === 'Encendido');
-          }
-        });
+      const autoPayload: Record<string, boolean> = {};
+      const activePayload: Record<string, boolean> = {};
 
-        try {
-          console.log(`[SETTINGS DEBUG] Transmitiendo paquete global mode=auto:`, JSON.stringify(autoPayload));
-          const resAuto = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=auto', {
+      // Analizamos y dividimos ÚNICAMENTE los elementos que fueron modificados
+      Object.keys(updatesToTransmit).forEach(key => {
+        const val = updatesToTransmit[key];
+        if (val === 'Automático') {
+          autoPayload[key] = true;
+        } else {
+          autoPayload[key] = false; // Informamos al modo auto que ya no tiene control
+          activePayload[key] = (val === 'Encendido'); // Informamos a active el valor de la corriente
+        }
+      });
+
+      try {
+        // Transmitimos solo si el objeto payload no está vacío
+        if (Object.keys(autoPayload).length > 0) {
+          console.log(`[SETTINGS DEBUG] PATCH Delta mode=auto:`, JSON.stringify(autoPayload));
+          await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=auto', {
             method: 'PATCH', headers, body: JSON.stringify(autoPayload)
           });
-          console.log(`[SETTINGS DEBUG] Estatus mode=auto:`, resAuto.status);
-
-          // 3. Solo enviamos a mode=active si hay al menos un actuador en modo manual
-          if (Object.keys(activePayload).length > 0) {
-            console.log(`[SETTINGS DEBUG] Transmitiendo paquete global mode=active:`, JSON.stringify(activePayload));
-            const resActive = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', {
-              method: 'PATCH', headers, body: JSON.stringify(activePayload)
-            });
-            console.log(`[SETTINGS DEBUG] Estatus mode=active:`, resActive.status);
-          }
-        } catch (error: any) {
-          console.error("[SETTINGS DEBUG] Fallo en la transmisión global:", error.message);
         }
-      }, 800); 
 
-      return newState; // Actualizamos la interfaz inmediatamente
-    });
+        if (Object.keys(activePayload).length > 0) {
+          console.log(`[SETTINGS DEBUG] PATCH Delta mode=active:`, JSON.stringify(activePayload));
+          await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', {
+            method: 'PATCH', headers, body: JSON.stringify(activePayload)
+          });
+        }
+      } catch (error: any) {
+        console.error("[SETTINGS DEBUG] Fallo en la transmisión delta:", error.message);
+      }
+    }, 800); 
   };
 
   return (
@@ -193,9 +195,14 @@ export default function SettingsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         
         <View style={styles.header}>
-          <View style={[styles.profileIconContainer, styles.shadow]}>
+          {/* BOTÓN DE ENLACE AL NUEVO MÓDULO DE EDICIÓN DE CONTEXTO */}
+          <TouchableOpacity 
+            style={[styles.profileIconContainer, styles.shadow]}
+            onPress={() => router.push('/edit-context')}
+            activeOpacity={0.7}
+          >
             <Ionicons name="settings-outline" size={28} color="#2C3E50" />
-          </View>
+          </TouchableOpacity>
         </View>
 
         <ScrollView 
@@ -212,8 +219,6 @@ export default function SettingsScreen() {
           <CustomThreeWaySwitch label="Iluminación Principal" currentValue={systems.lighting} onSelect={(val: string) => handleSystemChange('lighting', val)} />
           <View style={styles.divider} />
           <CustomThreeWaySwitch label="Iluminación Ultravioleta (UV)" currentValue={systems.uv} onSelect={(val: string) => handleSystemChange('uv', val)} />
-          <View style={styles.divider} />
-          <CustomThreeWaySwitch label="Control de Sombreado (Shading)" currentValue={systems.shading} onSelect={(val: string) => handleSystemChange('shading', val)} />
           <View style={{ height: 40 }} /> 
         </ScrollView>
 

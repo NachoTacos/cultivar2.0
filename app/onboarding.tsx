@@ -217,7 +217,6 @@ export default function OnboardingScreen() {
           >
             
             <View style={styles.header}>
-              {/* Botón de retroceso, visible solo en la fase 3 */}
               {step === 3 && (
                 <TouchableOpacity 
                   style={styles.backButton} 
@@ -255,7 +254,6 @@ const styles = StyleSheet.create({
   keyboardView: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingHorizontal: 25, paddingBottom: 40 },
   
-  // Encabezado con posición relativa para contener el botón absoluto
   header: { marginTop: 20, marginBottom: 30, alignItems: 'center', position: 'relative', justifyContent: 'center' },
   backButton: { position: 'absolute', left: 0, top: 0, padding: 5, zIndex: 10 },
   headerTitle: { fontFamily: 'Lato_700Bold', fontSize: 26, color: '#2C3E50', textAlign: 'center' },
