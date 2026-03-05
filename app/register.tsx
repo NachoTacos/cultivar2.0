@@ -37,7 +37,7 @@ export default function RegisterScreen() {
 
       const data = await response.json();
 
-      if (response.ok) {
+if (response.ok) {
         Alert.alert(
           "¡Registro Exitoso!", 
           "Tu cuenta ha sido creada. Ahora puedes iniciar sesión.",

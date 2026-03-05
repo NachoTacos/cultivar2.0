@@ -6,9 +6,9 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
-
 function RootLayoutNav() {
-  const { userToken, isLoading } = useAuth();
+  // 1. Extraemos isNewUser del núcleo de autenticación
+  const { userToken, isLoading, isNewUser } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -18,22 +18,35 @@ function RootLayoutNav() {
     const publicRoutes = ['login', 'register'];
     const currentRoute = segments[0];
 
+    // Lógica de enrutamiento estricto
     if (!userToken) {
+      // Estado A: Sin acceso. Solo permitimos login o register.
       if (!publicRoutes.includes(currentRoute)) {
         router.replace('/login');
       }
     } 
     else {
-      if (publicRoutes.includes(currentRoute)) {
-        router.replace('/(tabs)');
+      // Estado B: Con acceso
+      if (isNewUser) {
+        // Sub-estado B1: Usuario nuevo. Forzamos la entrada al Onboarding.
+        if (currentRoute !== 'onboarding') {
+          router.replace('/onboarding');
+        }
+      } else {
+        // Sub-estado B2: Usuario calibrado. Bloqueamos login, register y onboarding.
+        if (publicRoutes.includes(currentRoute) || currentRoute === 'onboarding') {
+          router.replace('/(tabs)');
+        }
       }
     }
-  }, [userToken, isLoading, segments]);
+  }, [userToken, isLoading, isNewUser, segments]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" />
       <Stack.Screen name="register" /> 
+      {/* 2. Registramos la nueva pantalla en la pila de navegación */}
+      <Stack.Screen name="onboarding" /> 
       <Stack.Screen name="(tabs)" />
     </Stack>
   );
