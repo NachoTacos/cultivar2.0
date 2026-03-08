@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-// --- SUBCOMPONENTE ---
 const CustomThreeWaySwitch = ({ label, currentValue, onSelect }: any) => {
   const options = ['Apagado', 'Automático', 'Encendido'];
 
@@ -49,12 +48,10 @@ const CustomThreeWaySwitch = ({ label, currentValue, onSelect }: any) => {
   );
 };
 
-// --- PANTALLA PRINCIPAL ---
 export default function SettingsScreen() {
   const { userToken } = useAuth();
-  const router = useRouter(); // Enrutador para navegar a la edición de contexto
+  const router = useRouter(); 
 
-  // Purga del sistema "shading" del estado base
   const [systems, setSystems] = useState({
     irrigator: 'Automático',
     heater: 'Automático',
@@ -67,11 +64,8 @@ export default function SettingsScreen() {
   const currentSystemsRef = useRef(systems);
   useEffect(() => { currentSystemsRef.current = systems; }, [systems]);
 
-  // 1. Subrutina de lectura
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (isManualRefresh = false) => {
     if (!userToken) return;
-    
-    console.log("\n[SETTINGS DEBUG] --- Iniciando lectura de estado (GET) ---");
     
     try {
       const headers = {
@@ -88,9 +82,6 @@ export default function SettingsScreen() {
         const dataActive = await resActive.json();
         const dataAuto = await resAuto.json();
         
-        console.log("[SETTINGS DEBUG] Respuesta servidor (mode=active):", JSON.stringify(dataActive));
-        console.log("[SETTINGS DEBUG] Respuesta servidor (mode=auto):", JSON.stringify(dataAuto));
-        
         const parseCombinedStatus = (key: keyof typeof systems, currentVal: string) => {
           if (dataAuto && dataAuto[key] === true) return 'Automático';
           if (dataActive && dataActive[key] !== undefined) return dataActive[key] ? 'Encendido' : 'Apagado';
@@ -104,88 +95,82 @@ export default function SettingsScreen() {
           uv: parseCombinedStatus('uv', prev.uv)
         }));
       } else {
-        console.error("[SETTINGS DEBUG] Error HTTP en GET. Active:", resActive.status, "Auto:", resAuto.status);
+        if (isManualRefresh) {
+          Alert.alert("Falla de Sincronización", `No se logró obtener el estado actual de los actuadores. (Código: ERR-SET-${resActive.status || resAuto.status})`);
+        }
       }
     } catch (error) {
-      console.error("[SETTINGS DEBUG] Fallo de red en GET:", error);
+      if (isManualRefresh) {
+        Alert.alert("Error de Conexión", "Verifique su acceso a internet. No se pudo conectar con el hardware. (Código: ERR-SET-NET)");
+      }
     } finally {
       setRefreshing(false);
     }
   }, [userToken]);
 
-  // --- DIRECTIVA DE CICLO DE VIDA ---
-  // Ejecuta la lectura cada vez que la pestaña entra en foco
   useFocusEffect(
     useCallback(() => {
-      fetchStatus();
+      fetchStatus(false);
     }, [fetchStatus])
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchStatus();
+    fetchStatus(true);
   }, [fetchStatus]);
 
   const globalDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  // REFERENCIA: Memoria temporal para aislar solo los cambios recientes
   const pendingUpdatesRef = useRef<Record<string, string>>({});
 
   const handleSystemChange = (systemKey: string, newValue: string) => {
-    console.log(`\n[SETTINGS DEBUG] --- Intento de cambio parcial: ${systemKey} -> ${newValue} ---`);
-    
-    // Actualizamos la interfaz gráfica inmediatamente para no romper la fluidez
     setSystems(prev => ({ ...prev, [systemKey]: newValue }));
     
-    // Registramos el cambio exacto en la bandeja de salida
     pendingUpdatesRef.current[systemKey] = newValue;
 
     if (globalDebounceTimer.current) {
       clearTimeout(globalDebounceTimer.current);
     }
 
-    // Ejecución del paquete optimizado tras 800ms
     globalDebounceTimer.current = setTimeout(async () => {
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${userToken}`
       };
 
-      // Extraemos la cola de cambios y vaciamos la referencia para el futuro
       const updatesToTransmit = { ...pendingUpdatesRef.current };
       pendingUpdatesRef.current = {}; 
 
       const autoPayload: Record<string, boolean> = {};
       const activePayload: Record<string, boolean> = {};
 
-      // Analizamos y dividimos ÚNICAMENTE los elementos que fueron modificados
       Object.keys(updatesToTransmit).forEach(key => {
         const val = updatesToTransmit[key];
         if (val === 'Automático') {
           autoPayload[key] = true;
         } else {
-          autoPayload[key] = false; // Informamos al modo auto que ya no tiene control
-          activePayload[key] = (val === 'Encendido'); // Informamos a active el valor de la corriente
+          autoPayload[key] = false; 
+          activePayload[key] = (val === 'Encendido'); 
         }
       });
 
       try {
-        // Transmitimos solo si el objeto payload no está vacío
         if (Object.keys(autoPayload).length > 0) {
-          console.log(`[SETTINGS DEBUG] PATCH Delta mode=auto:`, JSON.stringify(autoPayload));
-          await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=auto', {
+          const resAuto = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=auto', {
             method: 'PATCH', headers, body: JSON.stringify(autoPayload)
           });
+          if (!resAuto.ok) throw new Error("Fallo en capa auto");
         }
 
         if (Object.keys(activePayload).length > 0) {
-          console.log(`[SETTINGS DEBUG] PATCH Delta mode=active:`, JSON.stringify(activePayload));
-          await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', {
+          const resActive = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', {
             method: 'PATCH', headers, body: JSON.stringify(activePayload)
           });
+          if (!resActive.ok) throw new Error("Fallo en capa activa");
         }
       } catch (error: any) {
-        console.error("[SETTINGS DEBUG] Fallo en la transmisión delta:", error.message);
+        Alert.alert("Error de Transmisión", "No se pudieron aplicar los cambios en el hardware. Verifique la conexión. (Código: ERR-ACT-NET)");
+        fetchStatus(false);
       }
     }, 800); 
   };
@@ -195,7 +180,6 @@ export default function SettingsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         
         <View style={styles.header}>
-          {/* BOTÓN DE ENLACE AL NUEVO MÓDULO DE EDICIÓN DE CONTEXTO */}
           <TouchableOpacity 
             style={[styles.profileIconContainer, styles.shadow]}
             onPress={() => router.push('/edit-context')}
@@ -227,7 +211,6 @@ export default function SettingsScreen() {
   );
 }
 
-// --- ESTILOS ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },

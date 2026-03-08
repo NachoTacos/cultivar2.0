@@ -11,8 +11,8 @@ const { width } = Dimensions.get('window');
 
 interface AssessmentData {
   health: string;
-  generalText: string;
-  tips: string[];
+  message: string;
+  advice: string[];
 }
 
 export default function CameraScreen() {
@@ -60,7 +60,6 @@ export default function CameraScreen() {
     }
   }, [userToken]);
 
-  // 2. Subrutina de análisis biológico
   const fetchAssessment = useCallback(async (isManualRefresh = false) => {
     if (!userToken) return;
     setIsFetchingAssessment(true);
@@ -74,26 +73,10 @@ export default function CameraScreen() {
       if (response.ok) {
         const data = await response.json();
         
-        let generalText = data.message || "";
-        let tipsArray: string[] = [];
-
-        const tipsKeyword = "Consejos:";
-        const consejosIndex = generalText.indexOf(tipsKeyword);
-
-        if (consejosIndex !== -1) {
-          generalText = data.message.substring(0, consejosIndex).trim();
-          const tipsRawText = data.message.substring(consejosIndex + tipsKeyword.length);
-          
-          tipsArray = tipsRawText
-            .split(/\d+\)/)
-            .map((t: string) => t.trim())
-            .filter((t: string) => t.length > 0);
-        }
-
         setAssessment({
           health: data.health || "Desconocida",
-          generalText: generalText,
-          tips: tipsArray
+          message: data.message || "",
+          advice: data.advice || []
         });
       } else {
         if (isManualRefresh) {
@@ -135,9 +118,11 @@ export default function CameraScreen() {
 
   const getHealthColor = (healthLevel: string) => {
     const level = healthLevel.toLowerCase();
-    if (level.includes('buena') || level.includes('óptima')) return { backgroundColor: '#2ECC71' };
-    if (level.includes('moderada') || level.includes('regular')) return { backgroundColor: '#F39C12' };
-    return { backgroundColor: '#E74C3C' }; 
+    if (level === 'excelente') return { backgroundColor: '#27AE60' };
+    if (level === 'bueno') return { backgroundColor: '#2ECC71' };
+    if (level === 'moderado') return { backgroundColor: '#F39C12' };
+    if (level === 'malo') return { backgroundColor: '#E74C3C' };
+    return { backgroundColor: '#8A95A5' };
   };
 
   return (
@@ -203,7 +188,7 @@ export default function CameraScreen() {
           {isFetchingAssessment ? (
             <View style={styles.assessmentLoading}>
               <ActivityIndicator size="small" color="#2ECC71" />
-              <Text style={styles.assessmentLoadingText}>Analizando biometría vegetal...</Text>
+              <Text style={styles.assessmentLoadingText}>Sincronizando diagnóstico vegetal...</Text>
             </View>
           ) : assessment ? (
             <View style={[styles.assessmentCard, styles.shadow]}>
@@ -216,12 +201,12 @@ export default function CameraScreen() {
                 </View>
               </View>
 
-              <Text style={styles.generalText}>{assessment.generalText}</Text>
+              <Text style={styles.generalText}>{assessment.message}</Text>
 
-              {assessment.tips.length > 0 && (
+              {assessment.advice && assessment.advice.length > 0 && (
                 <View style={styles.tipsContainer}>
                   <Text style={styles.tipsTitle}>Plan de Acción Recomendado:</Text>
-                  {assessment.tips.map((tip, index) => (
+                  {assessment.advice.map((tip, index) => (
                     <View key={index} style={styles.tipRow}>
                       <Ionicons name="checkmark-circle" size={20} color="#2ECC71" style={styles.tipIcon} />
                       <Text style={styles.tipText}>{tip}</Text>
@@ -230,7 +215,21 @@ export default function CameraScreen() {
                 </View>
               )}
             </View>
-          ) : null}
+          ) : (
+            <View style={[styles.assessmentCard, styles.shadow, styles.emptyAssessmentContainer]}>
+              <Ionicons name="cloud-offline-outline" size={36} color="#8A95A5" style={{ marginBottom: 10 }} />
+              <Text style={styles.emptyAssessmentTitle}>Diagnóstico no disponible</Text>
+              <Text style={styles.emptyAssessmentText}>El núcleo central no devolvió la evaluación agronómica al abrir la pestaña.</Text>
+              <TouchableOpacity 
+                style={styles.retryButton} 
+                onPress={() => fetchAssessment(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="refresh" size={16} color="#27AE60" style={{ marginRight: 6 }} />
+                <Text style={styles.retryButtonText}>Reintentar Evaluación</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
         </ScrollView>
       </SafeAreaView>
@@ -263,14 +262,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   shadow: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
-  
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 15, marginBottom: 20 },
   headerTitle: { fontFamily: 'Lato_700Bold', fontSize: 24, color: '#2C3E50' },
   headerSubtitle: { fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2ECC71', marginTop: 2 },
   profileIconContainer: { backgroundColor: '#F9FDFA', padding: 8, borderRadius: 8 },
-  
   contentScroll: { paddingHorizontal: 20, paddingBottom: 40, alignItems: 'center' },
-  
   cameraFrame: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(44, 62, 80, 0.05)', marginBottom: 20 },
   viewport: { width: '100%', height: width * 0.75, backgroundColor: '#1A252C', justifyContent: 'center', alignItems: 'center', position: 'relative' },
   imageButton: { flex: 1, width: '100%' },
@@ -279,7 +275,6 @@ const styles = StyleSheet.create({
   noSignalContainer: { alignItems: 'center', justifyContent: 'center' },
   noSignalText: { fontFamily: 'Lato_400Regular', color: '#8A95A5', marginTop: 10, fontSize: 14 },
   loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(26, 37, 44, 0.4)', justifyContent: 'center', alignItems: 'center' },
-  
   cameraStatusBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 12, backgroundColor: '#F9FDFA' },
   statusLeft: { flexDirection: 'row', alignItems: 'center' },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
@@ -287,28 +282,30 @@ const styles = StyleSheet.create({
   dotFetching: { backgroundColor: '#2ECC71' }, 
   statusText: { fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2C3E50', letterSpacing: 0.5 },
   timeText: { fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8A95A5' },
-
   refreshButton: { flexDirection: 'row', backgroundColor: '#2C3E50', width: '100%', paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 25 },
   refreshButtonDisabled: { backgroundColor: '#8A95A5' },
   refreshButtonText: { fontFamily: 'Lato_700Bold', color: '#FFFFFF', fontSize: 16 },
-
+  
   assessmentLoading: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   assessmentLoadingText: { fontFamily: 'Lato_400Regular', color: '#8A95A5', marginLeft: 10 },
-  
   assessmentCard: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: 'rgba(44, 62, 80, 0.05)' },
+  
+  emptyAssessmentContainer: { alignItems: 'center', paddingVertical: 30, backgroundColor: '#FDFEFE' },
+  emptyAssessmentTitle: { fontFamily: 'Lato_700Bold', fontSize: 16, color: '#2C3E50', marginBottom: 6 },
+  emptyAssessmentText: { fontFamily: 'Lato_400Regular', fontSize: 14, color: '#8A95A5', textAlign: 'center', paddingHorizontal: 10, marginBottom: 20 },
+  retryButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: 'rgba(46, 204, 113, 0.4)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
+  retryButtonText: { fontFamily: 'Lato_700Bold', fontSize: 14, color: '#27AE60' },
+
   assessmentHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
   assessmentTitle: { fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2C3E50', marginLeft: 10, flex: 1 },
   healthBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
   healthText: { fontFamily: 'Lato_700Bold', fontSize: 12, color: '#FFFFFF' },
-  
   generalText: { fontFamily: 'Lato_400Regular', fontSize: 15, color: '#2C3E50', lineHeight: 22, marginBottom: 18, textAlign: 'justify' },
-  
   tipsContainer: { backgroundColor: '#F9FDFA', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: 'rgba(46, 204, 113, 0.2)' },
   tipsTitle: { fontFamily: 'Lato_700Bold', fontSize: 14, color: '#27AE60', marginBottom: 12 },
   tipRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   tipIcon: { marginRight: 10, marginTop: 2 },
   tipText: { flex: 1, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2C3E50', lineHeight: 20 },
-
   fullScreenContainer: { flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: '100%', height: '100%' },
   fullScreenControls: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 25, paddingTop: 25 },
