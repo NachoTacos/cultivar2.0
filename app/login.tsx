@@ -28,7 +28,7 @@ export default function LoginScreen() {
 
 const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Aviso", "Por favor ingresa tu correo y contraseña.");
+      Alert.alert("Aviso de Seguridad", "El acceso requiere que introduzca su correo y contraseña.");
       return;
     }
 
@@ -49,11 +49,10 @@ const handleLogin = async () => {
       if (response.ok && data.token) {
         await login(data.token); 
       } else {
-        Alert.alert("Error de acceso", data.message || "Revisa tu correo y contraseña.");
+        Alert.alert("Acceso Denegado", `${data.message || "Credenciales inválidas"}. (Código: ERR-LOG-${response.status})`);
       }
     } catch (error) {
-      Alert.alert("Error de red", "No se pudo conectar con el servidor.");
-      console.error(error);
+      Alert.alert("Error de Red", "No se pudo establecer enlace con el servidor central. Verifique su conexión. (Código: ERR-LOG-NET)");
     } finally {
       setIsLoading(false);
     }
@@ -175,10 +174,9 @@ const styles = StyleSheet.create({
     padding: 10, 
   },
   
-  button: { backgroundColor: '#2ECC71', paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginTop: 10, elevation: 3 },
+  button: { backgroundColor: '#2C3E50', paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginTop: 10, elevation: 3 },
   buttonText: { fontFamily: 'Lato_700Bold', color: '#FFFFFF', fontSize: 18 },
   
- 
   registerLink: {
     marginTop: 25,
     alignItems: 'center',
