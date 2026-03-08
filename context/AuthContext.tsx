@@ -25,15 +25,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       
       if (data && data.message === "Context information file is empty") {
-        console.log("[AUTH DEBUG] Contexto vacío detectado. Redirigiendo a configuración inicial.");
         setIsNewUser(true);
       } else {
-        console.log("[AUTH DEBUG] Contexto existente o válido detectado.");
         setIsNewUser(false);
       }
 
     } catch (error) {
-      console.error("[AUTH DEBUG] Anomalía de red al verificar contexto:", error);
+      // Falla silenciosa: Asumimos que no es un usuario nuevo para no forzar 
+      // el onboarding cada vez que haya una caída de red en el inicio.
       setIsNewUser(false); 
     }
   };
@@ -47,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await checkUserContext(token); 
         }
       } catch (error) {
-        console.error("Error al leer el token de la memoria segura", error);
+        // Falla silenciosa en la lectura de memoria segura local
       } finally {
         setIsLoading(false);
       }
@@ -68,7 +67,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const completeOnboarding = () => {
     setIsNewUser(false);
   };
-
 
   const logout = async () => {
     await SecureStore.deleteItemAsync('jwt_invernadero');

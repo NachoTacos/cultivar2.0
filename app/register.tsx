@@ -18,7 +18,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert("Campos incompletos", "Por favor llena todos los datos para crear tu cuenta.");
+      Alert.alert("Datos Requeridos", "Es necesario completar todos los campos para inicializar su cuenta.");
       return;
     }
 
@@ -37,17 +37,17 @@ export default function RegisterScreen() {
 
       const data = await response.json();
 
-if (response.ok) {
+      if (response.ok) {
         Alert.alert(
-          "¡Registro Exitoso!", 
-          "Tu cuenta ha sido creada. Ahora puedes iniciar sesión.",
-          [{ text: "Ir al Login", onPress: () => router.replace('/login') }]
+          "Registro Exitoso", 
+          "El usuario ha sido dado de alta en el sistema. Proceda a identificarse.",
+          [{ text: "Ingresar al Sistema", onPress: () => router.replace('/login') }]
         );
       } else {
-        Alert.alert("Error al registrar", data.message || "El correo ya podría estar en uso.");
+        Alert.alert("Registro Denegado", `${data.message || "El identificador de correo podría estar en uso"}. (Código: ERR-REG-${response.status})`);
       }
     } catch (error) {
-      Alert.alert("Error de red", "No se pudo conectar con el servidor.");
+      Alert.alert("Error de Red", "No se logró establecer enlace con el servidor de autenticación. (Código: ERR-REG-NET)");
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +55,6 @@ if (response.ok) {
 
   return (
     <LinearGradient colors={['#D5EFE0', '#FFFFFF']} style={styles.container}>
-      {/* Añadimos 'height' para Android y 'padding' para iOS */}
       <KeyboardAvoidingView 
         style={styles.keyboardView} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

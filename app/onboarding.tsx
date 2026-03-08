@@ -27,7 +27,7 @@ export default function OnboardingScreen() {
 
   const handleContextSubmit = async () => {
     if (!contextData.location || !contextData.substrate || !contextData.gardenType) {
-      Alert.alert("Datos incompletos", "Por favor, completa los campos principales de tu entorno.");
+      Alert.alert("Datos Requeridos", "Por favor, complete los campos principales de su entorno para continuar.");
       return;
     }
 
@@ -40,8 +40,6 @@ export default function OnboardingScreen() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${userToken}`
       };
-
-      console.log("[ONBOARDING DEBUG] Enviando contexto inicial:", JSON.stringify(contextData));
       
       const resContext = await fetch('https://cultiva-backend.onrender.com/gardens/context', {
         method: 'POST',
@@ -50,19 +48,17 @@ export default function OnboardingScreen() {
       });
 
       if (!resContext.ok) {
-        const errorText = await resContext.text();
-        console.error(`[ONBOARDING DEBUG CRÍTICO] HTTP Status: ${resContext.status} - Detalle: ${errorText}`);
-        throw new Error("El servidor central rechazó la conexión. ¿Está encendido el invernadero físico?");
+        throw new Error(`Rechazo del servidor. (Código: ERR-ONB-CTX-${resContext.status})`);
       }
-
-      console.log("[ONBOARDING DEBUG] Solicitando recomendaciones a DeepSeek...");
       
       const resRecommends = await fetch('https://cultiva-backend.onrender.com/gardens/chat/recommends', {
         method: 'GET',
         headers
       });
 
-      if (!resRecommends.ok) throw new Error("Anomalía al obtener recomendaciones botánicas.");
+      if (!resRecommends.ok) {
+        throw new Error(`Fallo al generar recomendaciones biológicas. (Código: ERR-ONB-REC-${resRecommends.status})`);
+      }
 
       const dataRecommends = await resRecommends.json();
       
@@ -70,12 +66,11 @@ export default function OnboardingScreen() {
         setRecommendedPlants(dataRecommends.plants);
         setStep(3); 
       } else {
-        throw new Error("El modelo no devolvió una lista válida de plantas.");
+        throw new Error("La IA no logró estructurar una lista válida. (Código: ERR-ONB-REC-EMPTY)");
       }
 
     } catch (error: any) {
-      console.error("[ONBOARDING DEBUG] Fallo en la subrutina:", error.message);
-      Alert.alert("Anomalía de Enlace", error.message);
+      Alert.alert("Anomalía de Configuración", error.message || "Fallo de red. Verifique su conexión al servidor. (Código: ERR-ONB-NET)");
       setStep(1); 
     } finally {
       setIsLoading(false);
@@ -93,8 +88,6 @@ export default function OnboardingScreen() {
         ...contextData, 
         plant: selectedPlant.trim() 
       };
-      
-      console.log("[ONBOARDING DEBUG] Enviando paquete final:", JSON.stringify(payload));
 
       const resFinal = await fetch('https://cultiva-backend.onrender.com/gardens/context', {
         method: 'POST',
@@ -105,22 +98,22 @@ export default function OnboardingScreen() {
         body: JSON.stringify(payload)
       });
 
-      if (!resFinal.ok) throw new Error("Fallo al registrar la planta seleccionada.");
+      if (!resFinal.ok) {
+        throw new Error(`Rechazo al registrar la planta. (Código: ERR-ONB-FIN-${resFinal.status})`);
+      }
 
-      console.log("[ONBOARDING DEBUG] Configuración completada con éxito.");
       completeOnboarding(); 
       router.replace('/(tabs)'); 
 
     } catch (error: any) {
-      console.error("[ONBOARDING DEBUG] Fallo en la fase final:", error.message);
-      Alert.alert("Error", "No pudimos guardar tu selección de planta.");
+      Alert.alert("Fallo de Inicialización", error.message || "No pudimos guardar su selección. (Código: ERR-ONB-NET)");
       setIsLoading(false);
     }
   };
 
   const renderStep1 = () => (
     <View style={styles.formContainer}>
-      <Text style={styles.instructions}>Para calibrar la Inteligencia Artificial, describe el entorno de tu invernadero.</Text>
+      <Text style={styles.instructions}>Para calibrar la Inteligencia Artificial, describa el entorno de su invernadero.</Text>
       
       <Text style={styles.label}>Ubicación Geográfica</Text>
       <TextInput style={styles.input} placeholder="Ej: Durango, México" placeholderTextColor="#8A95A5" value={contextData.location} onChangeText={(t) => setContextData({...contextData, location: t})} />
@@ -155,13 +148,13 @@ export default function OnboardingScreen() {
 
   const renderStep3 = () => (
     <View style={styles.plantsContainer}>
-      <Text style={styles.instructions}>Basado en tu entorno, el núcleo lógico sugiere estas especies. Selecciona una o ingresa la tuya:</Text>
+      <Text style={styles.instructions}>Basado en su entorno, el núcleo lógico sugiere estas especies. Seleccione una o ingrese la suya:</Text>
       
-      <Text style={styles.label}>Planta a cultivar</Text>
+      <Text style={styles.label}>Especie a cultivar</Text>
       <View style={styles.customPlantWrapper}>
         <TextInput 
           style={styles.customPlantInput} 
-          placeholder="Escribe tu propia planta..." 
+          placeholder="Escriba una planta..." 
           placeholderTextColor="#8A95A5" 
           value={customPlant} 
           onChangeText={setCustomPlant} 
@@ -197,7 +190,7 @@ export default function OnboardingScreen() {
       {isLoading && (
         <View style={{ marginTop: 20 }}>
           <ActivityIndicator size="large" color="#2ECC71" />
-          <Text style={{ textAlign: 'center', marginTop: 10, color: '#8A95A5' }}>Registrando selección...</Text>
+          <Text style={{ textAlign: 'center', marginTop: 10, color: '#8A95A5' }}>Registrando selección en el núcleo...</Text>
         </View>
       )}
     </View>
