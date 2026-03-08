@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, Image, TouchableOpacity, ActivityIndicator, Dimensions, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, Image, TouchableOpacity, ActivityIndicator, Dimensions, Modal, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,18 +18,15 @@ interface AssessmentData {
 export default function CameraScreen() {
   const { userToken } = useAuth();
   
-  // Estados de la cámara
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [isFetchingCamera, setIsFetchingCamera] = useState<boolean>(true);
   const [lastUpdate, setLastUpdate] = useState<string>('--:--:--');
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
 
-  // Estados de la evaluación agronómica
   const [assessment, setAssessment] = useState<AssessmentData | null>(null);
   const [isFetchingAssessment, setIsFetchingAssessment] = useState<boolean>(true);
 
-  // 1. Subrutina de captura visual (Asignada al botón)
-  const fetchCameraFrame = useCallback(async () => {
+  const fetchCameraFrame = useCallback(async (isManualRefresh = false) => {
     if (!userToken) return;
     setIsFetchingCamera(true);
 
@@ -50,17 +47,21 @@ export default function CameraScreen() {
         };
         reader.readAsDataURL(blob);
       } else {
-        console.error("[CAMERA DEBUG] Anomalía en la recepción de la imagen:", response.status);
+        if (isManualRefresh) {
+          Alert.alert("Falla de Captura", `No se pudo obtener la imagen del invernadero. (Código: ERR-CAM-${response.status})`);
+        }
         setIsFetchingCamera(false);
       }
     } catch (error) {
-      console.error("[CAMERA DEBUG] Fallo de red al conectar con la cámara:", error);
+      if (isManualRefresh) {
+        Alert.alert("Error de Conexión", "No se logró contactar con el hardware de la cámara. (Código: ERR-CAM-NET)");
+      }
       setIsFetchingCamera(false);
     }
   }, [userToken]);
 
-  // 2. Subrutina de análisis biológico (Asignada a la apertura de la pestaña)
-  const fetchAssessment = useCallback(async () => {
+  // 2. Subrutina de análisis biológico
+  const fetchAssessment = useCallback(async (isManualRefresh = false) => {
     if (!userToken) return;
     setIsFetchingAssessment(true);
 
@@ -95,20 +96,23 @@ export default function CameraScreen() {
           tips: tipsArray
         });
       } else {
-        console.error("[CAMERA DEBUG] Anomalía al obtener evaluación:", response.status);
+        if (isManualRefresh) {
+          Alert.alert("Error de Diagnóstico", `No fue posible evaluar el estado del cultivo. (Código: ERR-ASS-${response.status})`);
+        }
       }
     } catch (error) {
-      console.error("[CAMERA DEBUG] Fallo de red en evaluación:", error);
+      if (isManualRefresh) {
+        Alert.alert("Error de Red", "Verifique su acceso a internet. No se pudo conectar con la red de evaluación. (Código: ERR-ASS-NET)");
+      }
     } finally {
       setIsFetchingAssessment(false);
     }
   }, [userToken]);
 
-  // Directiva de ciclo de vida: Se ejecuta al entrar a la pestaña
   useFocusEffect(
     useCallback(() => {
-      fetchCameraFrame();
-      fetchAssessment();
+      fetchCameraFrame(false);
+      fetchAssessment(false);
     }, [fetchCameraFrame, fetchAssessment])
   );
 
@@ -152,7 +156,6 @@ export default function CameraScreen() {
 
         <ScrollView contentContainerStyle={styles.contentScroll} showsVerticalScrollIndicator={false}>
           
-          {/* --- BLOQUE ÓPTICO --- */}
           <View style={[styles.cameraFrame, styles.shadow]}>
             <View style={styles.viewport}>
               {imageBase64 ? (
@@ -187,10 +190,9 @@ export default function CameraScreen() {
             </View>
           </View>
 
-          {/* BOTÓN DE SINCRONIZACIÓN (Solo Cámara) */}
           <TouchableOpacity 
             style={[styles.refreshButton, styles.shadow, isFetchingCamera && styles.refreshButtonDisabled]} 
-            onPress={fetchCameraFrame}
+            onPress={() => fetchCameraFrame(true)}
             activeOpacity={0.8}
             disabled={isFetchingCamera}
           >
@@ -198,7 +200,6 @@ export default function CameraScreen() {
             <Text style={styles.refreshButtonText}>Capturar Fotografía</Text>
           </TouchableOpacity>
 
-          {/* --- BLOQUE DE EVALUACIÓN AGRONÓMICA --- */}
           {isFetchingAssessment ? (
             <View style={styles.assessmentLoading}>
               <ActivityIndicator size="small" color="#2ECC71" />
@@ -234,7 +235,6 @@ export default function CameraScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* --- MÓDULO DE PANTALLA COMPLETA --- */}
       <Modal visible={isFullScreen} transparent={false} animationType="fade" onRequestClose={closeFullScreen}>
         <View style={styles.fullScreenContainer}>
           {imageBase64 && (
@@ -249,7 +249,7 @@ export default function CameraScreen() {
             <TouchableOpacity style={styles.fsButton} onPress={closeFullScreen}>
               <Ionicons name="close" size={28} color="#FFFFFF" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.fsButton} onPress={fetchCameraFrame} disabled={isFetchingCamera}>
+            <TouchableOpacity style={styles.fsButton} onPress={() => fetchCameraFrame(true)} disabled={isFetchingCamera}>
               <Ionicons name="refresh" size={28} color={isFetchingCamera ? '#8A95A5' : '#FFFFFF'} />
             </TouchableOpacity>
           </SafeAreaView>
@@ -259,7 +259,6 @@ export default function CameraScreen() {
   );
 }
 
-// --- ESTILOS ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
@@ -293,7 +292,6 @@ const styles = StyleSheet.create({
   refreshButtonDisabled: { backgroundColor: '#8A95A5' },
   refreshButtonText: { fontFamily: 'Lato_700Bold', color: '#FFFFFF', fontSize: 16 },
 
-  // --- ESTILOS DE EVALUACIÓN ---
   assessmentLoading: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   assessmentLoadingText: { fontFamily: 'Lato_400Regular', color: '#8A95A5', marginLeft: 10 },
   
@@ -311,7 +309,6 @@ const styles = StyleSheet.create({
   tipIcon: { marginRight: 10, marginTop: 2 },
   tipText: { flex: 1, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2C3E50', lineHeight: 20 },
 
-  // --- PANTALLA COMPLETA ---
   fullScreenContainer: { flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: '100%', height: '100%' },
   fullScreenControls: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 25, paddingTop: 25 },
