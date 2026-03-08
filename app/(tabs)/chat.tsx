@@ -62,9 +62,6 @@ export default function ChatScreen() {
     const userText = textToSend.trim();
     const newUserMessage: Message = { id: Date.now().toString(), text: userText, sender: 'user' };
 
-    console.log(`\n[CHAT DEBUG] --- Iniciando comunicación con DeepSeek ---`);
-    console.log(`[CHAT DEBUG] Mensaje del usuario: "${userText}"`);
-
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
     setInputText('');
     Keyboard.dismiss(); 
@@ -72,7 +69,7 @@ export default function ChatScreen() {
 
     let currentState = null;
     try {
-      console.log(`[CHAT DEBUG] Solicitando estado físico real (mode=active) antes de hablar con IA...`);
+      // Subrutina silenciosa: Si falla, la IA conversará sin el estado actual, manteniendo la operación fluida.
       const resRealidad = await fetch('https://cultiva-backend.onrender.com/gardens/activation?mode=active', {
         headers: { 'Authorization': `Bearer ${userToken}` }
       });
@@ -80,7 +77,7 @@ export default function ChatScreen() {
         currentState = await resRealidad.json();
       }
     } catch (e) {
-      console.error("[CHAT DEBUG] Fallo de red al obtener realidad:", e);
+      // Degradación elegante: Omitimos el reporte de error para no saturar al usuario
     }
 
     let contextForAI = previousContext ? { ...previousContext } : null;
@@ -111,13 +108,10 @@ export default function ChatScreen() {
         const aiResponse: Message = { id: (Date.now() + 1).toString(), text: data.message || "Procesado.", sender: 'ai' };
         setMessages(prev => [...prev, aiResponse]);
       } else {
-        const err = await response.json();
-        console.error(`[CHAT DEBUG] Error del servidor de Chat:`, err);
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: "Fallo en el núcleo lógico.", sender: 'ai' }]);
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: `Anomalía en el núcleo lógico. (Código: ERR-CHAT-${response.status})`, sender: 'ai' }]);
       }
     } catch (error) {
-      console.error("[CHAT DEBUG] Fallo crítico de comunicación:", error);
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: "Error de red. Verifica tu conexión.", sender: 'ai' }]);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: "Error de red. Verifica tu conexión con el servidor central. (Código: ERR-CHAT-NET)", sender: 'ai' }]);
     } finally {
       setIsLoading(false);
     }
