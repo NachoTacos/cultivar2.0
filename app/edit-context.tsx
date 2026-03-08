@@ -52,7 +52,6 @@ export default function EditContextScreen() {
           }
         }
       } catch (error) {
-        console.error("[EDIT DEBUG] Fallo al recuperar contexto:", error);
       } finally {
         setIsLoading(false);
       }
@@ -63,7 +62,7 @@ export default function EditContextScreen() {
 
   const handleUpdateContext = async () => {
     if (!contextData.location || !contextData.substrate || !contextData.gardenType || !contextData.plant) {
-      Alert.alert("Datos incompletos", "Ubicación, planta, sustrato y tipo de invernadero son obligatorios.");
+      Alert.alert("Datos incompletos", "Ubicación, especie cultivada, sustrato y tipo de invernadero son parámetros obligatorios.");
       return;
     }
 
@@ -80,17 +79,19 @@ export default function EditContextScreen() {
         body: JSON.stringify(contextData)
       });
 
-      if (!response.ok) throw new Error("Fallo al registrar la actualización en el servidor.");
+      if (!response.ok) {
+        Alert.alert("Error de Registro", `El servidor rechazó los nuevos parámetros. (Código: ERR-EDT-${response.status})`);
+        return;
+      }
 
       Alert.alert(
         "Actualización Completada", 
-        "Los parámetros del entorno han sido reconfigurados exitosamente.",
+        "Los parámetros del invernadero han sido reconfigurados exitosamente.",
         [{ text: "Entendido", onPress: () => router.back() }]
       );
 
     } catch (error: any) {
-      console.error("[EDIT DEBUG] Fallo en la actualización:", error.message);
-      Alert.alert("Anomalía de Enlace", "No pudimos guardar tus cambios.");
+      Alert.alert("Fallo de Transmisión", "No fue posible conectar con el servidor. Verifique su acceso a internet. (Código: ERR-EDT-NET)");
     } finally {
       setIsSaving(false);
     }
