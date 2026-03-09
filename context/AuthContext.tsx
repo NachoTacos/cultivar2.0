@@ -10,32 +10,8 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userToken, setUserToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isNewUser, setIsNewUser] = useState<boolean>(false);
-
-  const checkUserContext = async (token: string) => {
-    try {
-      const response = await fetch('https://cultiva-backend.onrender.com/gardens/context', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      
-      if (data && data.message === "Context information file is empty") {
-        setIsNewUser(true);
-      } else {
-        setIsNewUser(false);
-      }
-
-    } catch (error) {
-      // Falla silenciosa: Asumimos que no es un usuario nuevo para no forzar 
-      // el onboarding cada vez que haya una caída de red en el inicio.
-      setIsNewUser(false); 
-    }
-  };
+  
+  const [isNewUser, setIsNewUser] = useState<boolean>(true);
 
   useEffect(() => {
     const loadToken = async () => {
@@ -43,10 +19,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await SecureStore.getItemAsync('jwt_invernadero');
         if (token) {
           setUserToken(token);
-          await checkUserContext(token); 
+          setIsNewUser(true);
         }
       } catch (error) {
-        // Falla silenciosa en la lectura de memoria segura local
       } finally {
         setIsLoading(false);
       }
@@ -59,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await SecureStore.setItemAsync('jwt_invernadero', token);
     setUserToken(token);
     
-    await checkUserContext(token); 
+    setIsNewUser(true); 
     
     setIsLoading(false); 
   };
@@ -71,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     await SecureStore.deleteItemAsync('jwt_invernadero');
     setUserToken(null);
-    setIsNewUser(false);
+    setIsNewUser(true);
   };
 
   return (

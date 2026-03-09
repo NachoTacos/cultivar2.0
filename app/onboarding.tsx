@@ -12,10 +12,11 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
+  // --- DIRECTIVA DE DEMOSTRACIÓN: Valores pre-cargados ---
   const [contextData, setContextData] = useState({
-    location: '',
-    substrate: '',
-    gardenType: '',
+    location: 'Durango, México',
+    substrate: 'Fibra de coco',
+    gardenType: 'Vertical por goteo',
     temp_unit: 'Celsius',
     humidity_unit: '%',
     light_unit: '%',
@@ -48,7 +49,7 @@ export default function OnboardingScreen() {
       });
 
       if (!resContext.ok) {
-        throw new Error(`Rechazo del servidor. (Código: ERR-ONB-CTX-${resContext.status})`);
+        throw new Error(`Rechazo del servidor central. (Código: ERR-ONB-CTX-${resContext.status})`);
       }
       
       const resRecommends = await fetch('https://cultiva-backend.onrender.com/gardens/chat/recommends', {
@@ -66,7 +67,7 @@ export default function OnboardingScreen() {
         setRecommendedPlants(dataRecommends.plants);
         setStep(3); 
       } else {
-        throw new Error("La IA no logró estructurar una lista válida. (Código: ERR-ONB-REC-EMPTY)");
+        throw new Error("El modelo neuronal no logró estructurar una lista válida. (Código: ERR-ONB-REC-EMPTY)");
       }
 
     } catch (error: any) {
@@ -99,7 +100,7 @@ export default function OnboardingScreen() {
       });
 
       if (!resFinal.ok) {
-        throw new Error(`Rechazo al registrar la planta. (Código: ERR-ONB-FIN-${resFinal.status})`);
+        throw new Error(`Rechazo al registrar la especie botánica. (Código: ERR-ONB-FIN-${resFinal.status})`);
       }
 
       completeOnboarding(); 

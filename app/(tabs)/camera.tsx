@@ -290,8 +290,7 @@ const styles = StyleSheet.create({
   assessmentLoadingText: { fontFamily: 'Lato_400Regular', color: '#8A95A5', marginLeft: 10 },
   assessmentCard: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: 'rgba(44, 62, 80, 0.05)' },
   
-  emptyAssessmentContainer: { alignItems: 'center', paddingVertical: 30, backgroundColor: '#FDFEFE' },
-  emptyAssessmentTitle: { fontFamily: 'Lato_700Bold', fontSize: 16, color: '#2C3E50', marginBottom: 6 },
+  emptyAssessmentContainer: { width: '100%', minHeight: 180, alignItems: 'center', justifyContent: 'center', paddingVertical: 30, backgroundColor: '#FDFEFE', borderWidth: 1, borderColor: 'rgba(44, 62, 80, 0.05)' },  emptyAssessmentTitle: { fontFamily: 'Lato_700Bold', fontSize: 16, color: '#2C3E50', marginBottom: 6 },
   emptyAssessmentText: { fontFamily: 'Lato_400Regular', fontSize: 14, color: '#8A95A5', textAlign: 'center', paddingHorizontal: 10, marginBottom: 20 },
   retryButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: 'rgba(46, 204, 113, 0.4)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
   retryButtonText: { fontFamily: 'Lato_700Bold', fontSize: 14, color: '#27AE60' },

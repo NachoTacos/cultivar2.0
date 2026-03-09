@@ -6,10 +6,10 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
 
-const InfoCard = ({ iconName, iconFamily, title, value, valueColor = '#2C3E50' }: any) => {
+const InfoCard = ({ iconName, iconFamily, title, value, valueColor = '#2C3E50', styleOverride }: any) => {
   const IconComponent = iconFamily === 'Ionicons' ? Ionicons : MaterialCommunityIcons;
   return (
-    <View style={[styles.card, styles.shadow]}>
+    <View style={[styles.card, styles.shadow, styleOverride]}>
       <IconComponent name={iconName} size={28} color="#2C3E50" style={{ marginBottom: 12 }} />
       <Text style={styles.cardTitle}>{title}</Text>
       <Text style={[styles.cardValue, { color: valueColor, textAlign: 'center' }]}>{value}</Text>
@@ -123,14 +123,14 @@ export default function HomeScreen() {
     ? `${airQuality.text}\n(${Math.round(sensorData.air_quality)} ppm)` 
     : airQuality.text;
 
-  let displayTime = '--:--:--';
+  let displayTime = '--:--';
   let displayDate = 'Sin conexión reciente';
   
   if (sensorData?.timestamp) {
-    const parts = sensorData.timestamp.split(' ');
+    const parts = sensorData.timestamp.split('T');
     if (parts.length === 2) {
       displayDate = parts[0]; 
-      displayTime = parts[1]; 
+      displayTime = parts[1].substring(0, 5); 
     }
   }
 
@@ -189,32 +189,47 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View style={styles.gridContainer}>
+          <View style={styles.cardsContainer}>
+            
             <InfoCard 
               iconName="cloud-outline" 
               iconFamily="Ionicons"
               title="CO2 (SCD30)" 
               value={formattedAirQuality} 
-              valueColor={airQuality.color} 
+              valueColor={airQuality.color}
+              styleOverride={styles.fullWidthCard}
             />
-            <InfoCard 
-              iconName="water-outline" 
-              iconFamily="Ionicons"
-              title="Humedad" 
-              value={sensorData?.air_humidity ? `${sensorData.air_humidity.toFixed(1)}%` : '--%'} 
-            />
-            <InfoCard 
-              iconName="thermometer-outline" 
-              iconFamily="Ionicons"
-              title="Temperatura" 
-              value={sensorData?.temperature ? `${sensorData.temperature.toFixed(1)}°C` : '--°C'} 
-            />
-            <InfoCard 
-              iconName="sunny-outline" 
-              iconFamily="Ionicons"
-              title="Luminosidad" 
-              value={sensorData?.luminosity ? `${sensorData.luminosity.toFixed(1)}%` : '--%'} 
-            />
+
+            <View style={styles.gridContainer}>
+              <InfoCard 
+                iconName="water-outline" 
+                iconFamily="Ionicons"
+                title="Humedad Aire" 
+                value={sensorData?.air_humidity != null ? `${sensorData.air_humidity.toFixed(1)}%` : '--%'} 
+                styleOverride={styles.halfWidthCard}
+              />
+              <InfoCard 
+                iconName="water" 
+                iconFamily="Ionicons"
+                title="Humedad Suelo" 
+                value={sensorData?.soil_humidity != null ? `${sensorData.soil_humidity.toFixed(1)}%` : '--%'} 
+                styleOverride={styles.halfWidthCard}
+              />
+              <InfoCard 
+                iconName="thermometer-outline" 
+                iconFamily="Ionicons"
+                title="Temperatura" 
+                value={sensorData?.temperature != null ? `${sensorData.temperature.toFixed(1)}°C` : '--°C'} 
+                styleOverride={styles.halfWidthCard}
+              />
+              <InfoCard 
+                iconName="sunny-outline" 
+                iconFamily="Ionicons"
+                title="Luminosidad" 
+                value={sensorData?.luminosity != null ? `${sensorData.luminosity.toFixed(1)}%` : '--%'} 
+                styleOverride={styles.halfWidthCard}
+              />
+            </View>
           </View>
 
         </ScrollView>
@@ -252,8 +267,14 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2ECC71', marginRight: 5 },
   statusText: { fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2ECC71' },
   
+  cardsContainer: { width: '100%' },
+  
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  card: { backgroundColor: '#F9FDFA', width: '47%', borderRadius: 12, paddingVertical: 20, paddingHorizontal: 10, alignItems: 'center', marginBottom: 15 },
+  
+  card: { backgroundColor: '#F9FDFA', borderRadius: 12, paddingVertical: 20, paddingHorizontal: 10, alignItems: 'center', marginBottom: 15 },
   cardTitle: { fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8A95A5', marginBottom: 10, textAlign: 'center' },
-  cardValue: { fontFamily: 'Lato_700Bold', fontSize: 20 } 
+  cardValue: { fontFamily: 'Lato_700Bold', fontSize: 20 },
+
+  fullWidthCard: { width: '100%' },
+  halfWidthCard: { width: '47%' }
 });
